@@ -1,0 +1,88 @@
+body {
+    background-image: url('img.jpeg'); /* Replace 'background-image.jpg' with the path to your background image */
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center;
+    background-color: #f8f9fa; /* Fallback color */
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.navbar-nav .nav-link {
+    color: #fff;
+    font-size: 1.2rem;
+    margin-left: 10px;
+}
+
+.navbar-nav .nav-link:hover {
+    color: #f8f9fa !important;
+    background-color: rgba(235, 34, 34, 0.2);
+    border-radius: 5px;
+}
+
+.navbar-nav .nav-link img {
+    height: 30px;
+}
+
+
+.container {
+    margin-top: 50px;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #007bff;
+}
+
+th {
+    background-color: #007bff;
+    color: #fff;
+    font-weight: bold;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.table td, .table th {
+    padding: 12px;
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.table-striped tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.2);
+}
+
+@media (max-width: 768px) {
+    .navbar-collapse {
+        background-color: #343a40; /* Background color for collapsed navbar */
+        padding: 20px; /* Adjust padding for better spacing */
+    }
+
+    .navbar-nav .nav-link {
+        font-size: 1rem; /* Decrease font size for smaller screens */
+    }
+
+    .container {
+        margin-top: 30px; /* Adjust margin-top for smaller screens */
+    }
+
+    h1 {
+        font-size: 1.5rem; /* Decrease font size for smaller screens */
+    }
+
+    th,
+    .table td,
+    .table th {
+        padding: 8px; /* Decrease padding for smaller screens */
+    }
+}

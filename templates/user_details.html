@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Details</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="icon" type="image/svg+xml" href="{{url_for('static', filename='images/logo.svg')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='/user_details.css')}}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <a class="navbar-brand" href="#">SnapTrack</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{url_for('user_details')}}">User Details</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Attendance Details</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{url_for('logout')}}">Log Out</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container">
+        <h1>Teacher Details</h1>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <caption>Teacher Details</caption>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Branch</th>
+                        <th>Year</th>
+                        <th>Semester</th>
+                        <th>Subject</th>                        
+                        <th>Password</th>
+                        
+                        <!-- Add more columns as needed -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in teacher %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.name }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.branch }}</td>
+                        <td>{{ user.year }}</td>
+                        <td>{{ user.sem }}</td>
+                        <td>{{ user.subject }}</td>
+                        <td>{{ user.password }}</td>
+                        <!-- Display additional user details as needed -->
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <h1>Authenticate Teacher</h1>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <caption>Authenticate Teacher</caption>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Branch</th>
+                        <th>Year</th>
+                        <th>Semester</th>
+                        <th>Subject</th>                        
+                        <th>Password</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user1 in auth_teacher %}
+                    <tr>
+                        <td>{{ user1.id }}</td>
+                        <td>{{ user1.name }}</td>
+                        <td>{{ user1.email }}</td>
+                        <td>{{ user1.branch }}</td>
+                        <td>{{ user1.year }}</td>
+                        <td>{{ user1.sem }}</td>
+                        <td>{{ user1.subject }}</td>
+                        <td>{{ user1.password }}</td>
+                        <td>
+                            <form action="{{ url_for('authenticate_user', user_id=user1.id) }}" method="post">
+                                <button type="submit" class="btn btn-success">Authenticate</button>
+                            </form>
+                            <form action="{{ url_for('reject_user', user_id=user1.id) }}" method="post">
+                                <button type="submit" class="btn btn-danger">Reject</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h1>Student Details</h1>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <caption>Student Details</caption>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Branch</th>
+                        <th>Year</th>
+                        <th>Semester</th>
+                        <th>Unique Number</th>                        
+                        <th>Password</th>
+                        
+                        <!-- Add more columns as needed -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in student %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.name }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.Branch }}</td>
+                        <td>{{ user.Year }}</td>
+                        <td>{{ user.sem }}</td>
+                        <td>{{ user.unique_number }}</td>
+                        <td>{{ user.password }}</td>
+                        <!-- Display additional user details as needed -->
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <h1>Authenticate Student</h1>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <caption>Authenticate Student</caption>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Branch</th>
+                        <th>Year</th>
+                        <th>Semester</th>
+                        <th>Unique Number</th>                        
+                        <th>Password</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user1 in auth_student %}
+                    <tr>
+                        <td>{{ user1.id }}</td>
+                        <td>{{ user1.name }}</td>
+                        <td>{{ user1.email }}</td>
+                        <td>{{ user1.branch }}</td>
+                        <td>{{ user1.year }}</td>
+                        <td>{{ user1.sem }}</td>
+                        <td>{{ user1.uniq_number }}</td>
+                        <td>{{ user1.password }}</td>
+                        <td>
+                            <form action="{{ url_for('authenticate_students', user_id=user1.id) }}" method="post">
+                                <button type="submit" class="btn btn-success">Authenticate</button>
+                            </form>
+                            <form action="{{ url_for('reject_student', user_id=user1.id) }}" method="post">
+                                <button type="submit" class="btn btn-danger">Reject</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

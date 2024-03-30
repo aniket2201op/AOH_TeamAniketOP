@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login </title>
+    <link rel="icon" href="../Achar website/images/logo2.jpg">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.0/css/bootstrap.min.css">
+    <link rel="icon" type="image/svg+xml" href="{{url_for('static', filename='images/logo.svg')}}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="{{url_for('static', filename='/teacher_login.css')}}">
+</head>
+
+<body>
+
+    <br>
+    <br>
+    <br>
+    <div class="cont">
+
+        <div class="form sign-in">
+            <form action="{{ url_for('login') }}" method="post">
+                <div class="msg">{{ msg }}</div>
+                <h2>Student Login</h2>
+                <label>
+                    <!-- <span>Email</span> -->
+                    <input id="username1" name="username1" type="text" placeholder="Enter Your e-mail" class="txt"
+                        type="email">
+                </label>
+                <label>
+                    <!-- <span>Password</span> -->
+                    <input id="password1" name="password1" type="password" placeholder="Enter Your Password" class="pass"
+                        type="password">
+                </label>
+                <p class="forgot-pass">Forgot password? <a class="forgot-pass" href="{{url_for('teacher_register')}}">Create
+                    new Account</a>
+                <!-- <button type="button" class="submit">Sign In</button> -->
+                    <button class="submit" type="submit" value="Sign In">Log in</button>
+                
+            </form>
+
+        </div>
+        <div class="sub-cont">
+
+            <div class="img">
+                <div class="img__text m--up">
+
+                    <h3>Are you a Teacher?<h3>
+                </div>
+                <div class="img__text m--in">
+
+                    <h3>Are you a Student?<h3>
+                </div>
+                <div class="img__btn">
+                    <span class="m--up">Click Here</span>
+                    <span class="m--in">Click Here</span>
+                </div>
+            </div>
+            <div class="form sign-up">
+                <form action="{{ url_for('login') }}" method="post">
+                    <div class="msg">{{ msg }}</div>
+                    <h2>Teacher Login</h2>
+
+                    <label>
+                        <!-- <span>Email</span> -->
+                        <input id="username" name="username" type="text" placeholder="Enter Your e-mail" class="txt"
+                            type="text">
+                    </label>
+                    <label>
+                        <!-- <span>Password</span> -->
+                        <input id="password" name="password" type="password" placeholder="Enter Your Password"
+                            class="pass" type="password">
+                    </label>
+                    <p class="forgot-pass">Forgot password? <a class="forgot-pass" href="{{url_for('teacher_register')}}">Create
+                            new Account</a>
+                            <button class="submit" type="submit" value="Sign In">Log in</button>
+                    </p>
+                </form>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelector('.img__btn').addEventListener('click', function () {
+            document.querySelector('.cont').classList.toggle('s--signup');
+        });
+    </script>
+
+    <br>
+    <br>
+    <br>
+
+
+
+
+
+
+
+
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.9.2/umd/popper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.0/js/bootstrap.min.js"></script>
+
+
+    <!-- ICON LINKS SCRIPT -->
+    <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+
+    <!-- ICON LINKS SCRIPTS -->
+
+
+</body>
+
+</html>

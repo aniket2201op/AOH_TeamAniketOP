@@ -1,0 +1,221 @@
+body {
+    background-image: url(../static/images/img.jpeg); 
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center;
+    background-color: #f8f9fa; /* Fallback color */
+    font-family: 'Open Sans', sans-serif; /* Set default font */
+    color: #fff; /* Set default text color */
+}
+.overlay1 {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black overlay */
+    z-index: 1000; /* Ensure it appears on top of other content */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.overlay1-content {
+    background-color: #fff; /* White background for content */
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); /* Drop shadow effect */
+    max-width: 80%; /* Limit the width of the content */
+    max-height: 80%; /* Limit the height of the content */
+    overflow-y: auto; /* Enable vertical scrolling if content exceeds height */
+}
+
+.overlay1 h2 {
+    font-size: 1.5em; /* Adjust the font size for heading */
+    margin-bottom: 10px; /* Add margin below heading */
+    color: #000;
+}
+
+.overlay1 p {
+    margin-bottom: 10px; /* Add margin below paragraphs */
+    color: #000;
+}
+
+.overlay1 ul {
+    list-style-type: none; /* Remove default bullet points */
+    padding: 0; /* Remove default padding */
+    margin: 0; /* Remove default margin */
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.overlay1 li {
+    margin-bottom: 5px; /* Add margin below list items */
+    color: #000;
+    flex-basis: calc(20% - 10px); /* Adjust width for 5x5 grid (20% width with 10px gap) */
+    text-align: center; /* Center-align the text */
+    font-size: 20px;
+}
+
+.overlay1 button {
+    display: block;
+    margin-top: 10px;
+    padding: 5px 10px;
+    background-color: #007bff; /* Blue button color */
+    color: #fff; /* White text color */
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.overlay1 button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.navbar-nav .nav-link {
+    color: #fff;
+    font-size: 1.2rem;
+    margin-left: 35px;
+    margin-right: 10px;
+}
+
+.navbar-nav .nav-link:hover {
+    color: #f8f9fa !important;
+    background-color: rgba(235, 34, 34, 0.2);
+    border-radius: 5px;
+}
+
+.navbar-nav .nav-link img {
+    height: 30px;
+}
+.centered-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.centered-form form {
+    margin: 20px 0;
+}
+
+.centered-form label,
+.centered-form select,
+.centered-form input,
+.centered-form button {
+    margin: 10px;
+    display: block;
+}
+
+.centered-form input[type="text"],
+.centered-form input[type="number"] {
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px;
+    border: 1px solid #5E5DF0;
+    border-radius: 4px;
+    color: #5E5DF0;
+    background-color: #FFFFFF;
+}
+
+.centered-form select{
+    height: 40px;
+    width: 200px;
+}
+
+.overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 100000; /* Increase the z-index value */
+}
+
+.overlay-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    z-index: 100001; /* Ensure the overlay content appears above the overlay */
+    color: #000; /* Set text color to black */
+    width: 500px; /* Adjust the width of the overlay content */
+    text-align: center; /* Center-align the text */
+}
+.overlay-content #countdown{
+    font-size:40px;
+}
+
+.overlay-content img {
+max-width: 100%;
+height: auto;
+}
+
+#closeOverlay {
+position: absolute;
+top: 10px;
+right: 10px;
+cursor: pointer;
+background: transparent;
+border: none;
+}
+
+.button-34 {
+background: #5E5DF0;
+border-radius: 999px;
+box-shadow: #5E5DF0 0 10px 20px -10px;
+box-sizing: border-box;
+color: #FFFFFF;
+cursor: pointer;
+font-family: Inter,Helvetica,"Apple Color Emoji","Segoe UI Emoji",NotoColorEmoji,"Noto Color Emoji","Segoe UI Symbol","Android Emoji",EmojiSymbols,-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans",sans-serif;
+font-size: 16px;
+font-weight: 700;
+line-height: 24px;
+opacity: 1;
+outline: 0 solid transparent;
+padding: 8px 18px;
+user-select: none;
+-webkit-user-select: none;
+touch-action: manipulation;
+width: fit-content;
+word-break: break-word;
+border: 0;
+}
+
+#countdown {
+font-size: 24px;
+font-weight: bold;
+}
+
+.dropdown-menu {
+background-color: #343a40; /* Dark background color */
+z-index: 1000; /* Ensure the dropdown menu appears on top */
+position: absolute; /* Position the dropdown absolutely */
+display: none; /* Initially hide the dropdown menu */
+color: #fff; /* Set text color to white */
+}
+
+.dropdown-menu a {
+color: #fff !important; /* Set text color to white */
+}
+
+.dropdown-menu a:hover {
+background-color: rgba(235, 34, 34, 0.2); /* Hover background color */
+border-radius: 5px;
+}
+
+.navbar-nav .nav-item:hover .dropdown-menu {
+display: block; /* Show the dropdown menu when its parent is hovered */
+}

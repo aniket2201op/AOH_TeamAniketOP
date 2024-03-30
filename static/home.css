@@ -1,0 +1,82 @@
+body {
+    background-image: url(../static/images/img.jpeg); 
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center;
+    background-color: #f8f9fa; /* Fallback color */
+    font-family: 'Open Sans', sans-serif; /* Set default font */
+    color: #fff; /* Set default text color */
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .navbar-nav .nav-link {
+        font-size: 1rem; /* Decrease font size for smaller screens */
+        margin-left: 10px; /* Adjust margin for smaller screens */
+        margin-right: 5px; /* Adjust margin for smaller screens */
+    }
+
+    .content {
+        margin-top: 30px; /* Adjust margin-top for smaller screens */
+    }
+
+    .content h1 {
+        font-size: 2rem; /* Decrease font size for smaller screens */
+        margin-bottom: 10px; /* Adjust margin for smaller screens */
+    }
+}
+
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.navbar-nav .nav-link {
+    color: #fff;
+    font-size: 1.2rem;
+    margin-left: 35px;
+    margin-right: 10px;
+}
+
+.navbar-nav .nav-link:hover {
+    color: #f8f9fa !important;
+    background-color: rgba(235, 34, 34, 0.2);
+    border-radius: 5px;
+}
+
+.navbar-nav .nav-link img {
+    height: 30px;
+}
+
+.dropdown-menu {
+background-color: #343a40; /* Dark background color */
+z-index: 1000; /* Ensure the dropdown menu appears on top */
+position: absolute; /* Position the dropdown absolutely */
+display: none; /* Initially hide the dropdown menu */
+color: #fff; /* Set text color to white */
+}
+
+.dropdown-menu a {
+color: #fff !important; /* Set text color to white */
+}
+
+.dropdown-menu a:hover {
+background-color: rgba(235, 34, 34, 0.2); /* Hover background color */
+border-radius: 5px;
+}
+
+.navbar-nav .nav-item:hover .dropdown-menu {
+display: block; /* Show the dropdown menu when its parent is hovered */
+}
+
+.content {
+    margin-top: 50px;
+    text-align: center;
+}
+
+.content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+}

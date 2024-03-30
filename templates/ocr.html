@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Roll Number Extractor</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="icon" type="image/svg+xml" href="{{url_for('static', filename='images/logo.svg')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='/ocr.css')}}">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-secondary">
+        <a class="navbar-brand" href="{{url_for('home')}}">SnapTrack</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="markAttendanceDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Mark Attendance
+                    </a>
+                    <div class="dropdown-menu" aria-labelledby="markAttendanceDropdown">
+                        <a class="dropdown-item" href="{{url_for('teacher_dashboard')}}">Using QR Code</a>
+                        <a class="dropdown-item" href="{{url_for('attendance')}}">Using OCR</a>
+                    </div>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('user_profile')}}">Profiles</a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="moreOptionsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        More
+                    </a>
+                    <div class="dropdown-menu" aria-labelledby="moreOptionsDropdown">
+                        <a class="dropdown-item" href="{{url_for('update_profile')}}">Add or remove subject</a>
+                        <a class="dropdown-item" href="#">Upload Attendance sheet</a>
+                    </div>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{url_for('logout')}}">Log Out</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container">
+        <h1>OCR Roll Number Extractor</h1>
+    
+        <form method="post" enctype="multipart/form-data">
+            <label for="file-upload" class="custom-file-upload">
+                Upload Image
+            </label>
+            <input id="file-upload" type="file" name="file" accept="image/*">
+            <button type="submit">Extract Roll Numbers</button>
+        </form>
+    
+        {% if image_path %}
+        <div>
+            <h2>Uploaded Image:</h2>
+            <img src="{{url_for('static', filename=img_path)}}" alt="Uploaded Image" class="img-fluid"
+                style="max-width: 100%; border-radius: 8px;">
+        {% endif %}
+            {% if roll_numbers %}
+            <div class="confirmation"
+                style="background-color: #f8f9fa; max-width: 600px; margin: 50px auto; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
+                <h2 style="text-align: center; color: #007bff;">Extracted Roll Numbers:</h2>
+                <form id="confirmForm" method="POST" action="{{ url_for('confirm_numbers', session_id=session['id']) }}" style="margin-top: 20px;">
+                    <div class="roll-numbers-grid">
+                        {% for roll_number in roll_numbers %}
+                        {% if roll_number.isdigit() %}
+                        <label class="col">
+                            <input type="checkbox" name="confirmedNumbers" value="{{ roll_number }}" checked>
+                            <span style="color:#007bff; margin-left: 10px;">{{ roll_number }}</span>
+                        </label>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <input type="date" name="attendance_date" id="attendance_date" min="{{ today }}" max="{{ endOfMonth }}">
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <select name="filename">
+                            <option value="">Select</option>
+                            {% for subject in data %}
+                            <option value="{{ subject }}">{{ subject }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <button id="confirmButton" type="button"
+                            style="background-color: #007bff; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px;">Confirm</button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="back-link">
+            <center><a href="{{url_for('home')}}">Back to Home</a> </center>
+        </div>
+    </div>
+    
+    
+    
+    <!-- Bootstrap JS and Popper.js (needed for Bootstrap functionality) -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        document.getElementById('confirmButton').addEventListener('click', function () {
+            var additionalNumbers = prompt("Please enter additional roll numbers, separated by commas:");
+            if (additionalNumbers) {
+                additionalNumbers.split(',').forEach(function (number) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'confirmedNumbers';
+                    input.value = number.trim();
+                    document.getElementById('confirmForm').appendChild(input);
+                });
+            }
+            document.getElementById('confirmForm').submit();
+        });
+
+
+        var today = new Date();
+var dd = String(today.getDate()).padStart(2, '0');
+var mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+var yyyy = today.getFullYear();
+
+today = yyyy + '-' + mm + '-' + dd;
+
+// Set the minimum allowed date to the first day of the current month
+var startOfMonth = yyyy + '-' + mm + '-01';
+
+// Set the maximum allowed date to the current date
+var endOfMonth = yyyy + '-' + mm + '-' + dd;
+
+document.getElementById("attendance_date").setAttribute("min", startOfMonth);
+document.getElementById("attendance_date").setAttribute("max", endOfMonth);
+
+    </script>
+</body>
+
+</html>
