@@ -15,6 +15,19 @@ document.addEventListener('DOMContentLoaded', function () {
     function onScanSuccess(decodedText, decodedResult) {
         console.log(`Code scanned = ${decodedText}`, decodedResult);
         handleQRCodeScanned(decodedText);
+        fetch('/qr_scan', {
+            method: 'POST',
+            body: JSON.stringify({}),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            // Handle response if needed
+        })
+        .catch(error => {
+            // Handle error if any
+        });
     }
 
     function onScanFailure(error) {

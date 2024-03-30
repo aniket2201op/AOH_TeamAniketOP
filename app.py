@@ -1,22 +1,26 @@
-import os
+from os import path as os1, makedirs as os
 from functools import wraps
 from flask import Flask, jsonify, render_template, request, redirect, session, url_for, send_file
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
-import re
-import cv2
+from re import match
+from cv2 import imread, cvtColor, GaussianBlur, threshold, THRESH_BINARY, THRESH_OTSU, dilate
+# print(cv2.__version__)
 import pytesseract
-import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
+from numpy import ones, uint8 as np
+from pandas import read_excel, to_datetime
+from pandas import DataFrame as df
+from datetime import datetime, timedelta, timezone
 from flask_cors import CORS
 import qrcode
 from io import BytesIO
 from PIL import Image
+import config as cfg
 
 
-error = 'error.html'
-# Placeholder for loaded Excel data
+
+
+
 excel_data = None
 
 def load_excel(file_path):
@@ -50,6 +54,37 @@ def loggedin_required(func):
         return func(*args, **kwargs)
     return decorated_view
 
+# def loggedin_required(func):
+#     @wraps(func)
+#     def decorated_view(*args, **kwargs):
+#         if not is_user_logged_in():
+#             return redirect(url_for('login'))
+
+#         # Check if QR code has been scanned
+#         if 'qr_code_scanned' in session:
+#             return "You cannot log out at the moment. Please try again later."
+
+#         return func(*args, **kwargs)
+#     return decorated_view
+
+def qr_scan_required(func):
+    @wraps(func)
+    def decorated_view(*args, **kwargs):
+        # Check if the route is protected by loggedin_required
+        if 'loggedin' in session:
+            buffer_active = session.get('buffer_active', False)
+            if buffer_active:
+                qr_scan_time = session.get('qr_scan_time')
+                if qr_scan_time:
+                    duration = timedelta(minutes=5)  # Adjust as needed
+                    current_time = datetime.now()
+                    if current_time - qr_scan_time < duration:
+                        # If within buffer period, prevent logout
+                        return "You cannot log out at the moment. Please try again later."
+
+        return func(*args, **kwargs)
+    return decorated_view
+
 def extract_roll_numbers(image_path):
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -65,12 +100,12 @@ def extract_roll_numbers(image_path):
 def save_to_excel(attendance_data, date, filename):
     excel_path = f"static/upload_sheet/{filename}.xlsx"
 
-    if not os.path.exists(excel_path):
+    if not os1.exists(excel_path):
         # Create a DataFrame with roll numbers from 1 to 100
-        df = pd.DataFrame({'Roll Number': range(1, 101)})
+        df = df({'Roll Number': range(1, 101)})
         df[date] = 'A'  # Initially mark all students as absent
     else:
-        df = pd.read_excel(excel_path)
+        df = read_excel(excel_path)
 
     if date not in df.columns:
         df[date] = 'A'  # Initially mark all students as absent
@@ -80,7 +115,7 @@ def save_to_excel(attendance_data, date, filename):
         df.loc[df[df['Roll Number'] == roll_number].index, date] = 'P'  # Present
 
     # Sort the columns by date, keeping 'Roll Number' fixed
-    cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=pd.to_datetime)
+    cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=to_datetime)
     df = df[cols]
 
     df.to_excel(excel_path, index=False)
@@ -147,18 +182,34 @@ def login():
             session['id'] = account['id']
             session['username'] = account['name']
             
-            if account['email'] == 'admin@gmail.com':
-                return render_template('admin.html')
+            if account['email'] == cfg.admin_email:
+                return render_template(cfg.admin)
             else: 
-                return render_template('home.html') 
+                return render_template(cfg.home) 
         else:
-            msg = 'Incorrect E-mail / password !'
+            msg = cfg.invalid_cred
 
-    return render_template('teacher_login.html', msg=msg)
+    return render_template(cfg.teacher_login, msg=msg)
    
 
     
+@app.route('/logout')
+def logout():
+    buffer_active = session.get('buffer_active', False)
+    if buffer_active:
+        qr_scan_time = session.get('qr_scan_time')
+        if qr_scan_time:
+            # Convert current_time to timezone-aware datetime object
+            current_time = datetime.now(timezone.utc)
 
+            duration = timedelta(minutes=5)  # Adjust as needed
+            if qr_scan_time - current_time  < duration:
+                return "You cannot log out at the. Please try again later."
+
+    session.pop('loggedin', None)
+    session.pop('id', None)
+    session.pop('username', None)
+    return redirect(url_for('login'))
 
 
 @app.route('/student_register', methods=['GET', 'POST'])
@@ -182,26 +233,26 @@ def student_register():
             account2 = cursor1.fetchone()
                 
             if  account1 or account2:
-                msg = 'Account already exists!'
-                return render_template('teacher_register.html',var1, msg=msg)
+                msg = cfg.account
+                return render_template(cfg.teacher_register,var1, msg=msg)
             elif not re.match(r'[^@]+@[^@]+\.[^@]+', email1):
-                msg = 'Invalid email address!'
-                return render_template('teacher_register.html',var1, msg=msg)
+                msg = cfg.email
+                return render_template(cfg.teacher_register,var1, msg=msg)
             elif not re.match(r'[A-Za-z0-9]+', name1):
-                msg = 'Username must contain only characters and numbers!'
-                return render_template('teacher_register.html',var1, msg=msg)
+                msg = cfg.username
+                return render_template(cfg.teacher_register,var1, msg=msg)
             elif not name1 or not password1 or not email1:
-                msg = 'Please fill out the form!'
-                return render_template('teacher_register.html',var1, msg=msg)
+                msg = cfg.form
+                return render_template(cfg.teacher_register,var1, msg=msg)
             else:
                 cursor1.execute('INSERT INTO student_auth VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)', ( name1, email1, branch1, year1, sem1, uniq_number, password1))
                 mysql.connection.commit()
                 cursor1.close()
-            msg = 'Request for Authentication has been sent!'
-        return render_template('teacher_login.html', msg=msg)
+            msg =cfg.authenticate
+        return render_template(cfg.teacher_login, msg=msg)
 
   
-    return render_template('teacher_register.html', msg=msg)
+    return render_template(cfg.teacher_register, msg=msg)
 
     
 
@@ -227,31 +278,31 @@ def teacher_register():
             cursor1.execute('SELECT * FROM teacher_login WHERE email = %s', (email2,))    
             account2 = cursor1.fetchone()
             if  account1 or account2:
-                msg = 'Account already exists!'
+                msg = cfg.account
                 render_template(var1, msg=msg)
             elif not re.match(r'[^@]+@[^@]+\.[^@]+', email2):
-                msg = 'Invalid email address!'
+                msg = cfg.email
                 render_template(var1, msg=msg)
             elif not re.match(r'[A-Za-z0-9]+', name2):
-                msg = 'Username must contain only characters and numbers!'
+                msg = cfg.username
                 render_template(var1, msg=msg)
             elif not name2 or not password2 or not email2:
-                msg = 'Please fill out the form!'
+                msg = cfg.form
                 render_template(var1, msg=msg)
             else:
                 cursor1.execute('INSERT INTO teacher_auth VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)', ( name2, email2, branch2, year2, sem2, subject1, password2))
 
                 mysql.connection.commit()
                 cursor1.close()
-            msg = 'Request for Authentication has been sent!'
-            return render_template('teacher_login.html', msg=msg)
+            msg = cfg.authenticate
+            return render_template(cfg.teacher_login, msg=msg)
     
-    return render_template('teacher_register.html', msg=msg)
+    return render_template(cfg.teacher_register, msg=msg)
 
 
 @app.route('/home')
 def home():
-	return render_template('home.html')
+	return render_template(cfg.home)
 
 
 # Route to display user profile
@@ -270,7 +321,7 @@ def user_profile():
 
                 # Load Excel data into memory
                     excel_data = load_excel(file_path)
-                    return render_template('user_profile.html', message='File uploaded successfully')
+                    return render_template(cfg.user_profile, message='File uploaded successfully')
 
             elif 'prn' in request.form:
                 if excel_data is not None:
@@ -279,13 +330,13 @@ def user_profile():
                 # Search for the user with the given PRN
                     user = excel_data[excel_data['PRN'] == prn].to_dict(orient='records')
 
-                    return render_template('user_profile.html', user=user)
+                    return render_template(cfg.user_profile, user=user)
                 else:
-                    return render_template('user_profile')
+                    return render_template(cfg.user_profile)
         except Exception as e:
             render_template(error,error_msg=str(e))
 
-    return render_template('user_profile.html')
+    return render_template(cfg.user_profile)
 
 @app.route('/attendance', methods=['GET', 'POST'])
 @loggedin_required
@@ -305,14 +356,14 @@ def attendance():
                 # Specify the folder where you want to save the file
             upload_folder = 'static/upload_sheet'
                 # Ensure the folder exists, create it if necessary
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
+            if not os1.exists(upload_folder):
+                os(upload_folder)
                 # Save the file to the specified folder
-            file.save(os.path.join(upload_folder, file.filename))
+            file.save(os1.join(upload_folder, file.filename))
                 # Additional processing if needed
-            return render_template("attendance.html", msg='File uploaded successfully')
+            return render_template(cfg.attendance, msg='File uploaded successfully')
 
-    return render_template('attendance.html')
+    return render_template(cfg.attendance)
 			
 
 @app.route('/update_profile', methods=['GET', 'POST'])
@@ -343,13 +394,13 @@ def update_profile():
                     (user_data['branch'], user_data['year'],
                      user_data['subject'], user_data['sem'], user_id))
                 mysql.connection.commit()
-                msg = 'Updated Successfully'
+                msg = cfg.update
 
             elif action == 'Delete':
                 # Delete user data from the database
                 cursor.execute('UPDATE teacher_login SET subject=NULL, branch=NULL, year=NULL, sem= NULL WHERE id=%s', (user_id,))
                 mysql.connection.commit()
-                msg = 'Deleted Successfully'
+                msg = cfg.delete
 
 
             elif action == 'Add':
@@ -370,12 +421,12 @@ def update_profile():
                 # Update the user in the database
                 cursor.execute('UPDATE teacher_login SET subject=%s, year=%s, branch=%s, sem=%s WHERE id=%s', (user_data['subject'], user1, user_data['branch'],user_data['sem'], user_id))
                 mysql.connection.commit()
-                msg = 'Added Successfully'
+                msg = cfg.add
 
             cursor.close()
-            return render_template('update_profile.html', data= user_data, msg = msg)
+            return render_template(cfg.update_profile, data= user_data, msg = msg)
 
-        return render_template('update_profile.html', data = user_data, msg=msg)
+        return render_template(cfg.update_profile, data = user_data, msg=msg)
     else:
         return redirect(url_for('home'))
 			
@@ -391,7 +442,7 @@ def model(session_id):
     user_data = cursor.fetchone()
     cursor.close()
         # **************
-    subjects = user_data['subject'].split(', ') if user_data and 'subject' in user_data else []
+    subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
 
     if request.method == 'POST' and 'file' in request.files:
         file = request.files['file']
@@ -400,8 +451,8 @@ def model(session_id):
             file.save(file_path)
             roll_numbers = extract_roll_numbers(file_path)
             print(file_path)
-            return render_template('ocr.html', roll_numbers=roll_numbers,image_path=file_path, data=subjects)
-    return render_template('ocr.html', data=subjects)
+            return render_template(cfg.ocr, roll_numbers=roll_numbers,image_path=file_path, data=subjects)
+    return render_template(cfg.ocr, data=subjects)
 
     
 
@@ -415,7 +466,7 @@ def confirm_numbers(session_id):
     cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (session_id,))
     user_data = cursor.fetchone()
     cursor.close()
-    subjects = user_data['subject'].split(', ') if user_data and 'subject' in user_data else []
+    subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
 
     confirmed_numbers = request.form.getlist('confirmedNumbers')
     attendance_date = request.form.get('attendance_date')
@@ -423,16 +474,16 @@ def confirm_numbers(session_id):
     filename1 = request.form.get('filename')
     filename1 += f'_{session_id}'
     
-    attendance_data = pd.DataFrame({'Roll Number': [int(num) for num in confirmed_numbers]})
+    attendance_data = df({'Roll Number': [int(num) for num in confirmed_numbers]})
     save_to_excel(attendance_data, attendance_date, filename1) 
 
-    return render_template('ocr.html', attendance_data=attendance_data, data=subjects)
+    return render_template(cfg.ocr, attendance_data=attendance_data, data=subjects)
 
 
 @app.route('/new_sheet')
 @loggedin_required
 def render():
-	return render_template('attendance.html')
+	return render_template(cfg.attendance)
 
 # @app.route('/change_password', methods=['GET', 'POST'])
 # @loggedin_required
@@ -545,15 +596,8 @@ def user_details():
     student = get_students()
     auth_teacher = authenticate_teacher()
     auth_student = authenticate_student()
-    return render_template('user_details.html', teacher=teacher, student=student, auth_teacher=auth_teacher, auth_student=auth_student)
+    return render_template(cfg.user_details, teacher=teacher, student=student, auth_teacher=auth_teacher, auth_student=auth_student)
 
-
-@app.route('/logout')
-def logout():
-	session.pop('loggedin', None)
-	session.pop('id', None)
-	session.pop('username', None)
-	return redirect(url_for('login'))
 
 
 
@@ -568,21 +612,45 @@ def teacher_dashboard():
         cursor.close()
         subjects = user_data['subject'].split(', ') if user_data and 'subject' in user_data else []
         current_date = datetime.now().strftime('%Y-%m-%d')
-        return render_template('teacher_dashboard.html', subjects=subjects, date=current_date, user_id=user_id)
+        return render_template(cfg.teacher_dashboard, subjects=subjects, date=current_date, user_id=user_id)
 
 
 
 
 @app.route('/student_dashboard', methods=['GET'])
-@loggedin_required
+@qr_scan_required
 def student_dashboard():
     if 'loggedin' in session:
-        user_id = session['id']
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT unique_number FROM student_login WHERE id = %s", (user_id,))
-        roll_number = cursor.fetchone()
-        cursor.close()
-        return render_template('student_dashboard.html', roll_number)
+        user_id = session.get('id')
+        if user_id:
+            cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+            cursor.execute("SELECT unique_number FROM student_login WHERE id = %s", (user_id,))
+            roll_number = cursor.fetchone()
+            cursor.close()
+            if roll_number:
+                buffer_active = session.get('buffer_active')
+                if buffer_active:
+                    qr_scan_time = session.get('qr_scan_time')
+                    if qr_scan_time:
+                        duration = timedelta(minutes=5)  # Adjust as needed
+                        current_time = datetime.now()
+                        if current_time - qr_scan_time < duration:
+                            # If within buffer period, prevent logout
+                            return "You cannot log out at the moment. Please try again later."
+                        else:
+                            # Buffer period expired, deactivate buffer
+                            session.pop('buffer_active', None)
+                return render_template(cfg.student_dashboard, roll_number=roll_number['unique_number'])
+            else:
+                # Handle case when roll_number is not found
+                return "Error: Roll number not found"
+        else:
+            # Handle case when user_id is not found in session
+            return "Error: User ID not found in session"
+    else:
+        # Handle case when 'loggedin' key is not found in session
+        return redirect(url_for('login'))
+        
 
 
 
@@ -610,8 +678,6 @@ def generate_qr_with_location():
     img_io = BytesIO()
     img.save(img_io, 'PNG')
     img_io.seek(0)
-    
-
     return send_file(img_io, mimetype='image/png')
 
 
@@ -651,7 +717,7 @@ def mark_attendance():
                 roll_number = row['unique_number']
                 # print("Roll number:", roll_number)
                 
-                attendance_data = pd.DataFrame({'Roll Number': [int(roll_number)]})
+                attendance_data = df({'Roll Number': [int(roll_number)]})
                 # print(attendance_data)
                 filename = f"{subject}_{teacher_id}"
                 save_to_excel(attendance_data, date, filename)
@@ -680,31 +746,70 @@ def reject_attendance():
 
 
 
+
 @app.route('/get_present_roll_numbers', methods=['POST'])
 def get_present_roll_numbers():
     data = request.json
     subject = data.get('subject')
-    user_id = session['id']
+    user_id = session.get('id')  # Make sure to use session.get() to handle potential absence of 'id'
 
-    if subject:
+    if subject and user_id:
         filename = f"{subject}_{user_id}"
 
-        file_path = os.path.join('static', 'upload_sheet', f'{filename}.xlsx')
+        file_path = os1.join('static', 'upload_sheet', f'{filename}.xlsx')
         try:
-            df = pd.read_excel(file_path)
+            df1 = read_excel(file_path)
         except FileNotFoundError:
             return jsonify({'error': f'Attendance sheet for {subject} not found'})
 
         current_date = datetime.now().strftime('%Y-%m-%d')
         print(current_date)
-        if current_date in df.columns:
-            present_entries = df.loc[df[current_date] == "P", 'Roll Number']
+        if current_date in df1.columns:
+            present_entries = df1.loc[df1[current_date] == "P", 'Roll Number']
             present_values = present_entries.tolist()
             return jsonify({'present_values': present_values})
         else:
             return jsonify({'error': 'No present entries for today'})
     else:
-        return jsonify({'error': 'Subject not provided'})
+        return jsonify({'error': 'Subject not provided or user not logged in'})  # Adjust the error message as needed
+
+@app.route('/upload_sheet', methods=['GET','POST'])
+@loggedin_required
+def upload_sheet():
+    if 'loggedin' in session:
+        user_id = session['id'] 
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (user_id,))
+        user_data = cursor.fetchone()
+        cursor.close()
+        excel_path = f"static/upload_sheet/"
+        subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
+        if request.method == 'POST':
+            year = request.form['year']
+            dept = request.form['dept']
+            subject = request.form['subject']
+            file = request.files['file']
+
+            if file and allowed_sheet(file.filename):
+                filename = f"{year}_{dept}_{subject}_{user_id}.xlsx"
+                filepath = os1.join(excel_path, filename)
+
+                file.save(filepath)
+                
+                
+                return render_template(cfg.upload_sheet, subjects=subjects, message="File uploaded successfully.")
+            else:
+                return render_template(cfg.upload_sheet, subjects=subjects, error="Invalid file format.")
+        else:
+            return render_template(cfg.upload_sheet, subjects=subjects)
+
+# Route for handling QR code scanning
+@app.route('/qr_scan', methods=['POST'])
+def qr_scan():
+    session['qr_code_scanned'] = True
+    session['qr_scan_time'] = datetime.now()
+    session['buffer_active'] = True
+    return 'QR code scanned successfully', 200
 
 
 
