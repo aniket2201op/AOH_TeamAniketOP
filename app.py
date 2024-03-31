@@ -86,25 +86,25 @@ def extract_roll_numbers(image_path):
 def save_to_excel(attendance_data, date, filename):
     excel_path = f"static/upload_sheet/{filename}.xlsx"
 
-    if not os.path.exists(excel_path):
+    if not path.exists(excel_path):
         # Create a DataFrame with roll numbers from 1 to 100
-        df = pd.DataFrame({'Roll Number': range(1, 101)})
-        df[date] = 'A'  # Initially mark all students as absent
+        df1 = df({'Roll Number': range(1, 101)})
+        df1[date] = 'A'  # Initially mark all students as absent
     else:
-        df = pd.read_excel(excel_path)
+        df1 = read_excel(excel_path)
 
-    if date not in df.columns:
-        df[date] = 'A'  # Initially mark all students as absent
+    if date not in df1.columns:
+        df1[date] = 'A'  # Initially mark all students as absent
 
     for roll_number in attendance_data['Roll Number']:
         # Update the existing row for the roll number
-        df.loc[df[df['Roll Number'] == roll_number].index, date] = 'P'  # Present
+        df1.loc[df1[df1['Roll Number'] == roll_number].index, date] = 'P'  # Present
 
     # Sort the columns by date, keeping 'Roll Number' fixed
-    cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=pd.to_datetime)
-    df = df[cols]
+    cols = ['Roll Number'] + sorted(df1.columns.drop('Roll Number'), key=to_datetime)
+    df1 = df1[cols]
 
-    df.to_excel(excel_path, index=False)
+    df1.to_excel(excel_path, index=False)
 
 def allowed_img(filename):
 	return '.' in filename and \
