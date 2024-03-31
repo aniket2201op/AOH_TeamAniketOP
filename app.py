@@ -1,9 +1,9 @@
-from os import path, makedirs
+from os import path, makedirs, listdir
 from functools import wraps
 from flask import Flask, jsonify, render_template, request, redirect, session, url_for, send_file
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
-import glob
+from glob import glob
 from re import match
 # import cv2
 from cv2 import imread, cvtColor, COLOR_BGR2GRAY, GaussianBlur, threshold, THRESH_BINARY_INV, dilate, THRESH_OTSU
@@ -14,12 +14,12 @@ from pandas import read_excel, to_datetime
 from pandas import DataFrame as df
 from datetime import datetime, timedelta, timezone
 from flask_cors import CORS
-import qrcode
+from qrcode import QRCode, constants
 from io import BytesIO
 from PIL import Image
 import config as cfg
-import requests
-import pytz
+from requests import post, exceptions
+from pytz import timezone, utc
 
 excel_data = None
 
@@ -29,8 +29,6 @@ def load_excel(file_path):
 
 ALLOWED_EXTENSIONS = set(['png','jpg','jpeg','gif','tiff','tif'])
 sheet_ext = set(['xlsx', 'xls',])
-
-
 
 app = Flask(__name__)
 app.config.from_object(cfg)
@@ -86,54 +84,27 @@ def extract_roll_numbers(image_path):
     return [roll.strip() for roll in text.replace('\n', ',').split(',')]
 
 def save_to_excel(attendance_data, date, filename):
-    filename_pattern = f"*{filename}.xlsx"  # Define the pattern to search for
-    matching_files = glob.glob(filename_pattern)
+    excel_path = f"static/upload_sheet/{filename}.xlsx"
 
-    if matching_files:
-        # If matching files exist, choose the first one
-        excel_path = matching_files[0]
-        # Read the existing Excel file
-        df1 = read_excel(excel_path, header=8)  # Use the 9th row as header
-    else:
-        # If no matching files exist, create a new Excel file
-        excel_path = f"static/upload_sheet/{filename}.xlsx"
+    if not os.path.exists(excel_path):
         # Create a DataFrame with roll numbers from 1 to 100
-        df1 = df({'Roll Number': range(1, 101)})
-        df1.iloc[8, 0] = 'Roll Number'  # Assuming 'Roll Number' is in the 9th row and 1st column
+        df = pd.DataFrame({'Roll Number': range(1, 101)})
+        df[date] = 'A'  # Initially mark all students as absent
+    else:
+        df = pd.read_excel(excel_path)
 
-    if date not in df1.columns:
-        df1[date] = 'A'  # Initially mark all students as absent
+    if date not in df.columns:
+        df[date] = 'A'  # Initially mark all students as absent
 
     for roll_number in attendance_data['Roll Number']:
         # Update the existing row for the roll number
-        roll_number_index = df1.index[df1['Roll Number'] == roll_number].tolist()[0]
-        df1.at[roll_number_index, date] = 'P'  # Present
+        df.loc[df[df['Roll Number'] == roll_number].index, date] = 'P'  # Present
 
     # Sort the columns by date, keeping 'Roll Number' fixed
-    cols = ['Roll Number'] + sorted(df1.columns.drop('Roll Number'), key=to_datetime)
-    df1 = df1[cols]
-    df1.to_excel(excel_path, index=False)
+    cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=pd.to_datetime)
+    df = df[cols]
 
-
-    # if not path.exists(excel_path):
-    #     # Create a DataFrame with roll numbers from 1 to 100
-    #     df = df({'Roll Number': range(1, 77)})
-    #     df[date] = 'A'  # Initially mark all students as absent
-    # else:
-    #     df = read_excel(excel_path)
-
-    # if date not in df.columns:
-    #     df[date] = 'A'  # Initially mark all students as absent
-
-    # for roll_number in attendance_data['Roll Number']:
-    #     # Update the existing row for the roll number
-    #     df.loc[df[df['Roll Number'] == roll_number].index, date] = 'P'  # Present
-
-    # # Sort the columns by date, keeping 'Roll Number' fixed
-    # cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=to_datetime)
-    # df = df[cols]
-
-    # df.to_excel(excel_path, index=False)
+    df.to_excel(excel_path, index=False)
 
 def allowed_img(filename):
 	return '.' in filename and \
@@ -143,18 +114,6 @@ def allowed_sheet(filename):
 	return '.' in filename and \
 			filename.rsplit('.', 1)[1].lower() in sheet_ext
 
-
-# app.secret_key = '1234'
-# db_config = {
-#     'host': 'localhost',
-#     'user': 'root',
-#     'password': '@Aniket2201',
-#     'database': 'ved'
-# }
-# app.config['MYSQL_HOST'] = 'localhost'
-# app.config['MYSQL_USER'] = 'root'
-# app.config['MYSQL_PASSWORD'] = '@Aniket2201'
-# app.config['MYSQL_DB'] = 'ved'
 
 @app.route('/some_route')
 def some_function():
@@ -191,24 +150,22 @@ def login():
         login_api_url = 'http://localhost:5001/api/login'
 
         try:
-            response = requests.post(login_api_url, json=data)
+            response = post(login_api_url, json=data)
             if response.status_code == 200:
                 response_data = response.json()
                 if response_data.get('success'):
                     session['loggedin'] = True
                     session['id'] = response_data['user']['id']
                     session['username'] = response_data['user']['name']
-                    dashboard_route = 'student_dashboard' if user_type == 'student' else 'teacher_dashboard'
+                    dashboard_route = 'student' if user_type == 'student' else 'home'
                     return redirect(url_for(dashboard_route))
                 else:
                     msg = response_data.get('message', 'Login failed')
             else:
                 msg = 'Failed to connect to the login API'
-        except requests.exceptions.RequestException as e:
+        except exceptions.RequestException as e:
             msg = str(e)
 
-    if msg:
-        flash(msg)
     return render_template(cfg.teacher_login, msg=msg)
    
 @app.route('/logout')
@@ -226,17 +183,15 @@ def logout_student():
         qr_scan_time = session.get('qr_scan_time')
         if qr_scan_time:
             # Convert qr_scan_time to a timezone-aware datetime object in UTC
-            qr_scan_time = qr_scan_time.replace(tzinfo=pytz.utc)
+            qr_scan_time = qr_scan_time.replace(tzinfo=utc)
 
             # Get the current time in India timezone
-            current_time = datetime.now(pytz.timezone('Asia/Kolkata'))
+            current_time = datetime.now(timezone('Asia/Kolkata'))
 
             duration = timedelta(minutes=1)  # Adjust as needed
             if current_time - qr_scan_time < duration:
-                print(qr_scan_time)
-                print(current_time)
-                print(current_time - qr_scan_time)
-                return "You cannot log out at the moment. Please try again later."
+                msg = "You cannot log out at the moment. Please try again later."
+                return render_template(cfg.student, msg= msg)
             else:
                 session['buffer_active'] = False
                 session.pop('loggedin', None)
@@ -258,7 +213,7 @@ def student_register():
             'sem': request.form['sem1']
         }
         registration_api_url = 'http://localhost:5002/api/register'
-        response = requests.post(registration_api_url, json=data)
+        response = post(registration_api_url, json=data)
         return handle_response(response)
     return render_template(cfg.teacher_register)
 
@@ -273,7 +228,7 @@ def teacher_register():
             'subject': request.form['subject']
         }
         registration_api_url = 'http://localhost:5002/api/register'
-        response = requests.post(registration_api_url, json=data)
+        response = post(registration_api_url, json=data)
         return handle_response(response)
     return render_template(cfg.teacher_register)
 
@@ -381,6 +336,9 @@ def handle_response(response):
 def home():
 	return render_template(cfg.home)
 
+@app.route('/student')
+def  student():
+    return render_template("student.html")
 
 # Route to display user profile
 @app.route('/user', methods=['GET', 'POST'])
@@ -722,9 +680,9 @@ def generate_qr_with_location():
     accept_attendance(subject)
     qr_data = f"User_id: {user_id}, Subject: {subject}, Date: {date}, Latitude: {latitude}, Longitude: {longitude}"
     # Generate QR code
-    qr = qrcode.QRCode(
+    qr = QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=constants.ERROR_CORRECT_L,
         box_size=10,
         border=4,
     )
@@ -864,7 +822,7 @@ def upload_sheet():
 @app.route('/qr_scan', methods=['POST'])
 def qr_scan():
     session['qr_code_scanned'] = True
-    ist = pytz.timezone('Asia/Kolkata')
+    ist = timezone('Asia/Kolkata')
     session['qr_scan_time'] = datetime.now(ist)
     session['buffer_active'] = True
     return 'QR code scanned successfully', 200
