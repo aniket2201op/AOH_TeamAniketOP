@@ -1,13 +1,15 @@
-from os import path as os1, makedirs as os
+from os import path, makedirs
 from functools import wraps
 from flask import Flask, jsonify, render_template, request, redirect, session, url_for, send_file
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
+import glob
 from re import match
-from cv2 import imread, cvtColor, GaussianBlur, threshold, THRESH_BINARY, THRESH_OTSU, dilate
+# import cv2
+from cv2 import imread, cvtColor, COLOR_BGR2GRAY, GaussianBlur, threshold, THRESH_BINARY_INV, dilate, THRESH_OTSU
 # print(cv2.__version__)
 import pytesseract
-from numpy import ones, uint8 as np
+from numpy import ones, uint8
 from pandas import read_excel, to_datetime
 from pandas import DataFrame as df
 from datetime import datetime, timedelta, timezone
@@ -16,16 +18,14 @@ import qrcode
 from io import BytesIO
 from PIL import Image
 import config as cfg
-
-
-
-
+import requests
+import pytz
 
 excel_data = None
 
 def load_excel(file_path):
     # Load Excel data using pandas
-    return pd.read_excel(file_path)
+    return read_excel(file_path)
 
 ALLOWED_EXTENSIONS = set(['png','jpg','jpeg','gif','tiff','tif'])
 sheet_ext = set(['xlsx', 'xls',])
@@ -33,6 +33,7 @@ sheet_ext = set(['xlsx', 'xls',])
 
 
 app = Flask(__name__)
+app.config.from_object(cfg)
 CORS(app)
 
 
@@ -54,19 +55,6 @@ def loggedin_required(func):
         return func(*args, **kwargs)
     return decorated_view
 
-# def loggedin_required(func):
-#     @wraps(func)
-#     def decorated_view(*args, **kwargs):
-#         if not is_user_logged_in():
-#             return redirect(url_for('login'))
-
-#         # Check if QR code has been scanned
-#         if 'qr_code_scanned' in session:
-#             return "You cannot log out at the moment. Please try again later."
-
-#         return func(*args, **kwargs)
-#     return decorated_view
-
 def qr_scan_required(func):
     @wraps(func)
     def decorated_view(*args, **kwargs):
@@ -77,7 +65,7 @@ def qr_scan_required(func):
                 qr_scan_time = session.get('qr_scan_time')
                 if qr_scan_time:
                     duration = timedelta(minutes=5)  # Adjust as needed
-                    current_time = datetime.now()
+                    current_time = datetime.now(timezone.utc)
                     if current_time - qr_scan_time < duration:
                         # If within buffer period, prevent logout
                         return "You cannot log out at the moment. Please try again later."
@@ -86,39 +74,66 @@ def qr_scan_required(func):
     return decorated_view
 
 def extract_roll_numbers(image_path):
-    img = cv2.imread(image_path)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, binary = cv2.threshold(blur,0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    kernel = np.ones((2, 2), np.uint8)
-    dilated = cv2.dilate(binary, kernel, iterations=2)
+    img = imread(image_path)
+    gray = cvtColor(img, COLOR_BGR2GRAY)
+    blur = GaussianBlur(gray, (5, 5), 0)
+    _, binary = threshold(blur,0, 255, THRESH_BINARY_INV + THRESH_OTSU)
+    kernel = ones((2, 2), uint8)
+    dilated = dilate(binary, kernel, iterations=2)
     hImg, wImg = dilated.shape
     cong = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789,'
     text = pytesseract.image_to_string(dilated, config=cong)
     return [roll.strip() for roll in text.replace('\n', ',').split(',')]
 
 def save_to_excel(attendance_data, date, filename):
-    excel_path = f"static/upload_sheet/{filename}.xlsx"
+    filename_pattern = f"*{filename}.xlsx"  # Define the pattern to search for
+    matching_files = glob.glob(filename_pattern)
 
-    if not os1.exists(excel_path):
-        # Create a DataFrame with roll numbers from 1 to 100
-        df = df({'Roll Number': range(1, 101)})
-        df[date] = 'A'  # Initially mark all students as absent
+    if matching_files:
+        # If matching files exist, choose the first one
+        excel_path = matching_files[0]
+        # Read the existing Excel file
+        df1 = read_excel(excel_path, header=8)  # Use the 9th row as header
     else:
-        df = read_excel(excel_path)
+        # If no matching files exist, create a new Excel file
+        excel_path = f"static/upload_sheet/{filename}.xlsx"
+        # Create a DataFrame with roll numbers from 1 to 100
+        df1 = df({'Roll Number': range(1, 101)})
+        df1.iloc[8, 0] = 'Roll Number'  # Assuming 'Roll Number' is in the 9th row and 1st column
 
-    if date not in df.columns:
-        df[date] = 'A'  # Initially mark all students as absent
+    if date not in df1.columns:
+        df1[date] = 'A'  # Initially mark all students as absent
 
     for roll_number in attendance_data['Roll Number']:
         # Update the existing row for the roll number
-        df.loc[df[df['Roll Number'] == roll_number].index, date] = 'P'  # Present
+        roll_number_index = df1.index[df1['Roll Number'] == roll_number].tolist()[0]
+        df1.at[roll_number_index, date] = 'P'  # Present
 
     # Sort the columns by date, keeping 'Roll Number' fixed
-    cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=to_datetime)
-    df = df[cols]
+    cols = ['Roll Number'] + sorted(df1.columns.drop('Roll Number'), key=to_datetime)
+    df1 = df1[cols]
+    df1.to_excel(excel_path, index=False)
 
-    df.to_excel(excel_path, index=False)
+
+    # if not path.exists(excel_path):
+    #     # Create a DataFrame with roll numbers from 1 to 100
+    #     df = df({'Roll Number': range(1, 77)})
+    #     df[date] = 'A'  # Initially mark all students as absent
+    # else:
+    #     df = read_excel(excel_path)
+
+    # if date not in df.columns:
+    #     df[date] = 'A'  # Initially mark all students as absent
+
+    # for roll_number in attendance_data['Roll Number']:
+    #     # Update the existing row for the roll number
+    #     df.loc[df[df['Roll Number'] == roll_number].index, date] = 'P'  # Present
+
+    # # Sort the columns by date, keeping 'Roll Number' fixed
+    # cols = ['Roll Number'] + sorted(df.columns.drop('Roll Number'), key=to_datetime)
+    # df = df[cols]
+
+    # df.to_excel(excel_path, index=False)
 
 def allowed_img(filename):
 	return '.' in filename and \
@@ -129,17 +144,24 @@ def allowed_sheet(filename):
 			filename.rsplit('.', 1)[1].lower() in sheet_ext
 
 
-app.secret_key = '1234'
-db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '@Aniket2201',
-    'database': 'ved'
-}
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = '@Aniket2201'
-app.config['MYSQL_DB'] = 'ved'
+# app.secret_key = '1234'
+# db_config = {
+#     'host': 'localhost',
+#     'user': 'root',
+#     'password': '@Aniket2201',
+#     'database': 'ved'
+# }
+# app.config['MYSQL_HOST'] = 'localhost'
+# app.config['MYSQL_USER'] = 'root'
+# app.config['MYSQL_PASSWORD'] = '@Aniket2201'
+# app.config['MYSQL_DB'] = 'ved'
+
+@app.route('/some_route')
+def some_function():
+    host = app.config['MYSQL_HOST']
+    user = app.config['MYSQL_USER']
+    password = app.config['MYSQL_PASSWORD']
+    db = app.config['MYSQL_DB']
 
 mysql = MySQL(app)
 def accept_attendance(subject):
@@ -155,149 +177,204 @@ def accept_attendance(subject):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     msg = ''
-    if request.method == 'POST' and 'username1' in request.form and 'password1' in request.form:
-        email = request.form['username1']
-        password = request.form['password1']
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM student_login WHERE email = %s AND password =%s', (email, password,))
-        account = cursor.fetchone()
-        cursor.close()
-        if account:
-            session['loggedin'] = True
-            session['id'] = account['id']
-            session['username'] = account['name']
-            
-            return render_template('student.html')       
-        else:
-            msg = 'Incorrect E-mail / password !'
-    elif request.method == 'POST' and 'username' in request.form and 'password' in request.form:
-        email = request.form['username']
-        password = request.form['password']
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM teacher_login WHERE email = %s AND password =%s', (email, password,))
-        account = cursor.fetchone()
-        cursor.close()
-        if account:
-            session['loggedin'] = True
-            session['id'] = account['id']
-            session['username'] = account['name']
-            
-            if account['email'] == cfg.admin_email:
-                return render_template(cfg.admin)
-            else: 
-                return render_template(cfg.home) 
-        else:
-            msg = cfg.invalid_cred
+    if request.method == 'POST':
+        user_type = 'student' if 'username1' in request.form else 'teacher'
+        email_field = 'username1' if user_type == 'student' else 'username'
+        password_field = 'password1' if user_type == 'student' else 'password'
 
+        data = {
+            'email': request.form.get(email_field),
+            'password': request.form.get(password_field),
+            'user_type': user_type
+        }
+
+        login_api_url = 'http://localhost:5001/api/login'
+
+        try:
+            response = requests.post(login_api_url, json=data)
+            if response.status_code == 200:
+                response_data = response.json()
+                if response_data.get('success'):
+                    session['loggedin'] = True
+                    session['id'] = response_data['user']['id']
+                    session['username'] = response_data['user']['name']
+                    dashboard_route = 'student_dashboard' if user_type == 'student' else 'teacher_dashboard'
+                    return redirect(url_for(dashboard_route))
+                else:
+                    msg = response_data.get('message', 'Login failed')
+            else:
+                msg = 'Failed to connect to the login API'
+        except requests.exceptions.RequestException as e:
+            msg = str(e)
+
+    if msg:
+        flash(msg)
     return render_template(cfg.teacher_login, msg=msg)
    
-
-    
 @app.route('/logout')
 def logout():
+	session.pop('loggedin', None)
+	session.pop('id', None)
+	session.pop('username', None)
+	return redirect(url_for('login'))
+
+    
+@app.route('/logout_student')
+def logout_student():
     buffer_active = session.get('buffer_active', False)
     if buffer_active:
         qr_scan_time = session.get('qr_scan_time')
         if qr_scan_time:
-            # Convert current_time to timezone-aware datetime object
-            current_time = datetime.now(timezone.utc)
+            # Convert qr_scan_time to a timezone-aware datetime object in UTC
+            qr_scan_time = qr_scan_time.replace(tzinfo=pytz.utc)
 
-            duration = timedelta(minutes=5)  # Adjust as needed
-            if qr_scan_time - current_time  < duration:
-                return "You cannot log out at the. Please try again later."
+            # Get the current time in India timezone
+            current_time = datetime.now(pytz.timezone('Asia/Kolkata'))
 
-    session.pop('loggedin', None)
-    session.pop('id', None)
-    session.pop('username', None)
+            duration = timedelta(minutes=1)  # Adjust as needed
+            if current_time - qr_scan_time < duration:
+                print(qr_scan_time)
+                print(current_time)
+                print(current_time - qr_scan_time)
+                return "You cannot log out at the moment. Please try again later."
+            else:
+                session['buffer_active'] = False
+                session.pop('loggedin', None)
+                session.pop('id', None)
+                session.pop('username', None)
     return redirect(url_for('login'))
 
 
 @app.route('/student_register', methods=['GET', 'POST'])
 def student_register():
-    msg = ''
-    
     if request.method == 'POST':
-        name1 = request.form['name1']
-        password1 = request.form['password1']
-        email1 = request.form['email1']
-        branch1 = request.form['branch1']
-        year1 = request.form['year1']
-        uniq_number = request.form['uniq_number']
-        sem1 = request.form['sem1'] 
+        data = {
+            'user_type': 'student',
+            'name': request.form['name1'],
+            'email': request.form['email1'],
+            'password': request.form['password1'],
+            'branch': request.form['branch1'],
+            'year': request.form['year1'],
+            'sem': request.form['sem1']
+        }
+        registration_api_url = 'http://localhost:5002/api/register'
+        response = requests.post(registration_api_url, json=data)
+        return handle_response(response)
+    return render_template(cfg.teacher_register)
+
+@app.route('/teacher_register', methods=['GET', 'POST'])
+def teacher_register():
+    if request.method == 'POST':
+        data = {
+            'user_type': 'teacher',
+            'name': request.form['name2'],
+            'email': request.form['email2'],
+            'password': request.form['password2'],
+            'subject': request.form['subject']
+        }
+        registration_api_url = 'http://localhost:5002/api/register'
+        response = requests.post(registration_api_url, json=data)
+        return handle_response(response)
+    return render_template(cfg.teacher_register)
+
+def handle_response(response):
+    if response.status_code == 200:
+        response_data = response.json()
+        if response_data.get('success'):
+            flash('Registration successful. Please log in.')
+            return redirect(url_for('login'))
+        else:
+            flash(response_data.get('message', 'Registration failed'))
+    else:
+        flash('Failed to connect to the registration API')
+    return redirect(url_for('home'))
+
+# @app.route('/student_register', methods=['GET', 'POST'])
+# def student_register():
+#     msg = ''
     
-        if name1 and password1 :
-            cursor1 = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-            cursor1.execute('SELECT * FROM student_login WHERE email = %s', (email1,))
-            account1 = cursor1.fetchone()
-            cursor1.execute('SELECT * FROM student_auth WHERE email = %s', (email1,))
-            account2 = cursor1.fetchone()
+#     if request.method == 'POST':
+#         name1 = request.form['name1']
+#         password1 = request.form['password1']
+#         email1 = request.form['email1']
+#         branch1 = request.form['branch1']
+#         year1 = request.form['year1']
+#         uniq_number = request.form['uniq_number']
+#         sem1 = request.form['sem1'] 
+    
+#         if name1 and password1 :
+#             cursor1 = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+#             cursor1.execute('SELECT email FROM student_login WHERE email = %s', (email1,))
+#             account1 = cursor1.fetchone()
+#             cursor1.execute('SELECT email FROM student_auth WHERE email = %s', (email1,))
+#             account2 = cursor1.fetchone()
                 
-            if  account1 or account2:
-                msg = cfg.account
-                return render_template(cfg.teacher_register,var1, msg=msg)
-            elif not re.match(r'[^@]+@[^@]+\.[^@]+', email1):
-                msg = cfg.email
-                return render_template(cfg.teacher_register,var1, msg=msg)
-            elif not re.match(r'[A-Za-z0-9]+', name1):
-                msg = cfg.username
-                return render_template(cfg.teacher_register,var1, msg=msg)
-            elif not name1 or not password1 or not email1:
-                msg = cfg.form
-                return render_template(cfg.teacher_register,var1, msg=msg)
-            else:
-                cursor1.execute('INSERT INTO student_auth VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)', ( name1, email1, branch1, year1, sem1, uniq_number, password1))
-                mysql.connection.commit()
-                cursor1.close()
-            msg =cfg.authenticate
-        return render_template(cfg.teacher_login, msg=msg)
+#             if  account1 or account2:
+#                 msg = cfg.account
+#                 return render_template(cfg.teacher_register,var1, msg=msg)
+#             elif not match(r'[^@]+@[^@]+\.[^@]+', email1):
+#                 msg = cfg.email
+#                 return render_template(cfg.teacher_register,var1, msg=msg)
+#             elif not match(r'[A-Za-z0-9]+', name1):
+#                 msg = cfg.username
+#                 return render_template(cfg.teacher_register,var1, msg=msg)
+#             elif not name1 or not password1 or not email1:
+#                 msg = cfg.form
+#                 return render_template(cfg.teacher_register,var1, msg=msg)
+#             else:
+#                 cursor1.execute('INSERT INTO student_auth VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)', ( name1, email1, branch1, year1, sem1, uniq_number, password1))
+#                 mysql.connection.commit()
+#                 cursor1.close()
+#             msg =cfg.authenticate
+#         return render_template(cfg.teacher_login, msg=msg)
 
   
-    return render_template(cfg.teacher_register, msg=msg)
+#     return render_template(cfg.teacher_register, msg=msg)
 
     
 
-@app.route('/teacher_register', methods=['GET','POST'])
-def teacher_register():
-    msg=''
+# @app.route('/teacher_register', methods=['GET','POST'])
+# def teacher_register():
+#     msg=''
     
-    if request.method == 'POST':
-        name2 = request.form['name2']
-        password2 = request.form['password2']
-        email2 = request.form['email2']
-        branch2 = request.form['branch2']
-        year2 = request.form['year2']
-        subject = request.form['subject']
-        subject1 = subject.upper()
-        sem2 = request.form['sem2']  # Added line
+#     if request.method == 'POST':
+#         name2 = request.form['name2']
+#         password2 = request.form['password2']
+#         email2 = request.form['email2']
+#         branch2 = request.form['branch2']
+#         year2 = request.form['year2']
+#         subject = request.form['subject']
+#         subject1 = subject.upper()
+#         sem2 = request.form['sem2']  # Added line
         
 
-        if name2 and password2 :
-            cursor1 = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-            cursor1.execute('SELECT * FROM teacher_auth WHERE email = %s', (email2,)) 
-            account1 = cursor1.fetchone()   
-            cursor1.execute('SELECT * FROM teacher_login WHERE email = %s', (email2,))    
-            account2 = cursor1.fetchone()
-            if  account1 or account2:
-                msg = cfg.account
-                render_template(var1, msg=msg)
-            elif not re.match(r'[^@]+@[^@]+\.[^@]+', email2):
-                msg = cfg.email
-                render_template(var1, msg=msg)
-            elif not re.match(r'[A-Za-z0-9]+', name2):
-                msg = cfg.username
-                render_template(var1, msg=msg)
-            elif not name2 or not password2 or not email2:
-                msg = cfg.form
-                render_template(var1, msg=msg)
-            else:
-                cursor1.execute('INSERT INTO teacher_auth VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)', ( name2, email2, branch2, year2, sem2, subject1, password2))
+#         if name2 and password2 :
+#             cursor1 = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+#             cursor1.execute('SELECT email FROM teacher_auth WHERE email = %s', (email2,)) 
+#             account1 = cursor1.fetchone()   
+#             cursor1.execute('SELECT email FROM teacher_login WHERE email = %s', (email2,))    
+#             account2 = cursor1.fetchone()
+#             if  account1 or account2:
+#                 msg = cfg.account
+#                 render_template(var1, msg=msg)
+#             elif not match(r'[^@]+@[^@]+\.[^@]+', email2):
+#                 msg = cfg.email
+#                 render_template(var1, msg=msg)
+#             elif not match(r'[A-Za-z0-9]+', name2):
+#                 msg = cfg.username
+#                 render_template(var1, msg=msg)
+#             elif not name2 or not password2 or not email2:
+#                 msg = cfg.form
+#                 render_template(var1, msg=msg)
+#             else:
+#                 cursor1.execute('INSERT INTO teacher_auth VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)', ( name2, email2, branch2, year2, sem2, subject1, password2))
 
-                mysql.connection.commit()
-                cursor1.close()
-            msg = cfg.authenticate
-            return render_template(cfg.teacher_login, msg=msg)
+#                 mysql.connection.commit()
+#                 cursor1.close()
+#             msg = cfg.authenticate
+#             return render_template(cfg.teacher_login, msg=msg)
     
-    return render_template(cfg.teacher_register, msg=msg)
+#     return render_template(cfg.teacher_register, msg=msg)
 
 
 @app.route('/home')
@@ -356,10 +433,10 @@ def attendance():
                 # Specify the folder where you want to save the file
             upload_folder = 'static/upload_sheet'
                 # Ensure the folder exists, create it if necessary
-            if not os1.exists(upload_folder):
-                os(upload_folder)
+            if not path.exists(upload_folder):
+                makedirs(upload_folder)
                 # Save the file to the specified folder
-            file.save(os1.join(upload_folder, file.filename))
+            file.save(path.join(upload_folder, file.filename))
                 # Additional processing if needed
             return render_template(cfg.attendance, msg='File uploaded successfully')
 
@@ -374,7 +451,7 @@ def update_profile():
     if 'loggedin' in session:
         user_id = session['id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM teacher_login WHERE id = %s", (user_id,))
+        cursor.execute("SELECT id, name, email, branch, year, sem, subject FROM teacher_login WHERE id = %s", (user_id,))
         user_data = cursor.fetchone()
         
 
@@ -471,8 +548,8 @@ def confirm_numbers(session_id):
     confirmed_numbers = request.form.getlist('confirmedNumbers')
     attendance_date = request.form.get('attendance_date')
         # ************
-    filename1 = request.form.get('filename')
-    filename1 += f'_{session_id}'
+    filename = request.form.get('filename')
+    filename1 = f'{filename}_{session_id}'
     
     attendance_data = df({'Roll Number': [int(num) for num in confirmed_numbers]})
     save_to_excel(attendance_data, attendance_date, filename1) 
@@ -517,14 +594,14 @@ def render():
 # Newly Added
 def get_teacher():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('SELECT * FROM teacher_login')
+    cursor.execute('SELECT  FROM teacher_login')
     teacher = cursor.fetchall()
     cursor.close()
     return teacher
 
 def get_students():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('SELECT * FROM student_login')
+    cursor.execute('SELECT id, name, email, branch, year, sem, subject, password FROM student_login')
     student = cursor.fetchall()
     cursor.close()
     return student
@@ -532,14 +609,14 @@ def get_students():
 
 def authenticate_teacher():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('SELECT * FROM teacher_auth')  # Replace 'users' with your actual table name
+    cursor.execute('SELECT id, name, email, branch, year, sem, subject, password FROM teacher_auth')  # Replace 'users' with your actual table name
     teachers = cursor.fetchall()
     cursor.close()
     return teachers
 
 def authenticate_student():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('SELECT * FROM student_auth')  # Replace 'users' with your actual table name
+    cursor.execute('SELECT id, name, email, branch, year, sem, subject, password FROM student_auth')  # Replace 'users' with your actual table name
     students = cursor.fetchall()
     cursor.close()
     return students
@@ -547,7 +624,7 @@ def authenticate_student():
 @app.route('/authenticate/<int:user_id>', methods=['POST'])
 def authenticate_user(user_id):
     cursor = mysql.connection.cursor()
-    cursor.execute('SELECT * FROM teacher_auth WHERE id = %s', (user_id,))
+    cursor.execute('SELECT id, name, email, branch, year, sem, subject, password FROM teacher_auth WHERE id = %s', (user_id,))
     user = cursor.fetchone()
     if user:
         try:
@@ -570,7 +647,7 @@ def reject_user(user_id):
 @app.route('/authenticate_students/<int:user_id>', methods=['POST'])
 def authenticate_students(user_id):
     cursor = mysql.connection.cursor()
-    cursor.execute('SELECT * FROM student_auth WHERE id = %s', (user_id,))
+    cursor.execute('SELECT id, name, email, branch, year, sem, subject, password FROM student_auth WHERE id = %s', (user_id,))
     user = cursor.fetchone()
     if user:
         try:
@@ -610,7 +687,7 @@ def teacher_dashboard():
         cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
-        subjects = user_data['subject'].split(', ') if user_data and 'subject' in user_data else []
+        subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
         current_date = datetime.now().strftime('%Y-%m-%d')
         return render_template(cfg.teacher_dashboard, subjects=subjects, date=current_date, user_id=user_id)
 
@@ -618,7 +695,6 @@ def teacher_dashboard():
 
 
 @app.route('/student_dashboard', methods=['GET'])
-@qr_scan_required
 def student_dashboard():
     if 'loggedin' in session:
         user_id = session.get('id')
@@ -627,29 +703,10 @@ def student_dashboard():
             cursor.execute("SELECT unique_number FROM student_login WHERE id = %s", (user_id,))
             roll_number = cursor.fetchone()
             cursor.close()
-            if roll_number:
-                buffer_active = session.get('buffer_active')
-                if buffer_active:
-                    qr_scan_time = session.get('qr_scan_time')
-                    if qr_scan_time:
-                        duration = timedelta(minutes=5)  # Adjust as needed
-                        current_time = datetime.now()
-                        if current_time - qr_scan_time < duration:
-                            # If within buffer period, prevent logout
-                            return "You cannot log out at the moment. Please try again later."
-                        else:
-                            # Buffer period expired, deactivate buffer
-                            session.pop('buffer_active', None)
-                return render_template(cfg.student_dashboard, roll_number=roll_number['unique_number'])
-            else:
-                # Handle case when roll_number is not found
-                return "Error: Roll number not found"
+            return render_template(cfg.student, roll_number=roll_number['unique_number'])
         else:
             # Handle case when user_id is not found in session
             return "Error: User ID not found in session"
-    else:
-        # Handle case when 'loggedin' key is not found in session
-        return redirect(url_for('login'))
         
 
 
@@ -756,7 +813,7 @@ def get_present_roll_numbers():
     if subject and user_id:
         filename = f"{subject}_{user_id}"
 
-        file_path = os1.join('static', 'upload_sheet', f'{filename}.xlsx')
+        file_path = path.join('static', 'upload_sheet', f'{filename}.xlsx')
         try:
             df1 = read_excel(file_path)
         except FileNotFoundError:
@@ -792,7 +849,7 @@ def upload_sheet():
 
             if file and allowed_sheet(file.filename):
                 filename = f"{year}_{dept}_{subject}_{user_id}.xlsx"
-                filepath = os1.join(excel_path, filename)
+                filepath = path.join(excel_path, filename)
 
                 file.save(filepath)
                 
@@ -807,7 +864,8 @@ def upload_sheet():
 @app.route('/qr_scan', methods=['POST'])
 def qr_scan():
     session['qr_code_scanned'] = True
-    session['qr_scan_time'] = datetime.now()
+    ist = pytz.timezone('Asia/Kolkata')
+    session['qr_scan_time'] = datetime.now(ist)
     session['buffer_active'] = True
     return 'QR code scanned successfully', 200
 

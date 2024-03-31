@@ -47,7 +47,7 @@
                         <input type="date" name="attendance_date" id="attendance_date" min="{{ today }}" max="{{ endOfMonth }}">
                     </div>
                     <div style="display: flex; justify-content: center; margin-top: 20px;">
-                        <select name="filename">
+                        <select name="filename" required>
                             <option value="">Select</option>
                             {% for subject in data %}
                             <option value="{{ subject }}">{{ subject }}</option>
