@@ -5,7 +5,6 @@ from flask_mysqldb import MySQL
 import MySQLdb.cursors
 from glob import glob
 from re import match
-# import cv2
 from cv2 import imread, cvtColor, COLOR_BGR2GRAY, GaussianBlur, threshold, THRESH_BINARY_INV, dilate, THRESH_OTSU
 # print(cv2.__version__)
 import pytesseract
@@ -78,7 +77,7 @@ def extract_roll_numbers(image_path):
     _, binary = threshold(blur,0, 255, THRESH_BINARY_INV + THRESH_OTSU)
     kernel = ones((2, 2), uint8)
     dilated = dilate(binary, kernel, iterations=2)
-    hImg, wImg = dilated.shape
+    _, _ = dilated.shape
     cong = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789,'
     text = pytesseract.image_to_string(dilated, config=cong)
     return [roll.strip() for roll in text.replace('\n', ',').split(',')]
@@ -88,7 +87,7 @@ def save_to_excel(attendance_data, date, filename):
 
     if not path.exists(excel_path):
         # Create a DataFrame with roll numbers from 1 to 100
-        df1 = df({'Roll Number': range(1, 101)})
+        df1 = df({cfg.roll_number: range(1, 101)})
         df1[date] = 'A'  # Initially mark all students as absent
     else:
         df1 = read_excel(excel_path)
@@ -96,12 +95,12 @@ def save_to_excel(attendance_data, date, filename):
     if date not in df1.columns:
         df1[date] = 'A'  # Initially mark all students as absent
 
-    for roll_number in attendance_data['Roll Number']:
+    for roll_number in attendance_data[cfg.roll_number]:
         # Update the existing row for the roll number
         df1.loc[df1[df1['Roll Number'] == roll_number].index, date] = 'P'  # Present
 
     # Sort the columns by date, keeping 'Roll Number' fixed
-    cols = ['Roll Number'] + sorted(df1.columns.drop('Roll Number'), key=to_datetime)
+    cols = [cfg.roll_number] + sorted(df1.columns.drop(cfg.roll_number), key=to_datetime)
     df1 = df1[cols]
 
     df1.to_excel(excel_path, index=False)
@@ -117,10 +116,10 @@ def allowed_sheet(filename):
 
 @app.route('/some_route')
 def some_function():
-    host = app.config['MYSQL_HOST']
-    user = app.config['MYSQL_USER']
-    password = app.config['MYSQL_PASSWORD']
-    db = app.config['MYSQL_DB']
+    app.config['MYSQL_HOST']
+    app.config['MYSQL_USER']
+    app.config['MYSQL_PASSWORD']
+    app.config['MYSQL_DB']
 
 mysql = MySQL(app)
 def accept_attendance(subject):
@@ -425,7 +424,7 @@ def update_profile():
 
                 # Update the user in the database
                 cursor.execute(
-                    'UPDATE register SET branch=%s, year=%s, subject=%s, sem=%s WHERE id=%s',
+                    'UPDATE teacher_login SET branch=%s, year=%s, subject=%s, sem=%s WHERE id=%s',
                     (user_data['branch'], user_data['year'],
                      user_data['subject'], user_data['sem'], user_id))
                 mysql.connection.commit()
@@ -473,7 +472,7 @@ def model(session_id):
     if session_id_from_url is not None:
         session_id = session_id_from_url
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (session_id,))
+    cursor.execute(cfg.display_subjects, (session_id,))
     user_data = cursor.fetchone()
     cursor.close()
         # **************
@@ -498,7 +497,7 @@ def confirm_numbers(session_id):
         session_id = session_id_from_url
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (session_id,))
+    cursor.execute(cfg.display_subjects, (session_id,))
     user_data = cursor.fetchone()
     cursor.close()
     subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
@@ -509,7 +508,7 @@ def confirm_numbers(session_id):
     filename = request.form.get('filename')
     filename1 = f'{filename}_{session_id}'
     
-    attendance_data = df({'Roll Number': [int(num) for num in confirmed_numbers]})
+    attendance_data = df({cfg.roll_number: [int(num) for num in confirmed_numbers]})
     save_to_excel(attendance_data, attendance_date, filename1) 
 
     return render_template(cfg.ocr, attendance_data=attendance_data, data=subjects)
@@ -519,35 +518,6 @@ def confirm_numbers(session_id):
 @loggedin_required
 def render():
 	return render_template(cfg.attendance)
-
-# @app.route('/change_password', methods=['GET', 'POST'])
-# @loggedin_required
-# def change_password():
-#     if 'loggedin' in session:
-#         if request.method == 'POST':
-#             current_password = request.form['current_password']
-#             new_password = request.form['new_password']
-#             confirm_password = request.form['confirm_password']
-
-#             cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-#             cursor.execute('SELECT * FROM teacher_login WHERE id = %s', (session['id'],))
-#             user = cursor.fetchone()
-
-#             if user and user['password'] == current_password:
-#if new_password == confirm_password:
-#                     try:
-#                         cursor.execute('UPDATE teacher_login SET password = %s WHERE id = %s', (new_password, session['id']))
-#                         mysql.connection.commit()
-#                         msg = 'Password updated successfully, Login again'
-#                         return render_template('login.html', msg=msg)
-#                     except Exception as e:
-#                         msg = 'Error updating password: ' + str(e)
-#                 else:
-#                     msg = 'New password and confirm password do not match'
-#             else:
-#                 msg = 'Current password is incorrect'
-#             return render_template('change_pwd.html', msg=msg)
-#     return render_template('change_pwd.html')
 
 # Newly Added
 def get_teacher():
@@ -642,7 +612,7 @@ def teacher_dashboard():
     if 'loggedin' in session:
         user_id = session['id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (user_id,))
+        cursor.execute(cfg.display_subjects, (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
         subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
@@ -732,7 +702,7 @@ def mark_attendance():
                 roll_number = row['unique_number']
                 # print("Roll number:", roll_number)
                 
-                attendance_data = df({'Roll Number': [int(roll_number)]})
+                attendance_data = df({cfg.roll_number: [int(roll_number)]})
                 # print(attendance_data)
                 filename = f"{subject}_{teacher_id}"
                 save_to_excel(attendance_data, date, filename)
@@ -780,7 +750,7 @@ def get_present_roll_numbers():
         current_date = datetime.now().strftime('%Y-%m-%d')
         print(current_date)
         if current_date in df1.columns:
-            present_entries = df1.loc[df1[current_date] == "P", 'Roll Number']
+            present_entries = df1.loc[df1[current_date] == "P", cfg.roll_number]
             present_values = present_entries.tolist()
             return jsonify({'present_values': present_values})
         else:
@@ -794,10 +764,10 @@ def upload_sheet():
     if 'loggedin' in session:
         user_id = session['id'] 
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT subject FROM teacher_login WHERE id = %s", (user_id,))
+        cursor.execute(cfg.display_subjects, (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
-        excel_path = f"static/upload_sheet/"
+        excel_path = "static/upload_sheet/"
         subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
         if request.method == 'POST':
             year = request.form['year']

@@ -34,3 +34,6 @@ update = 'Updated Successfully'
 delete = 'Deleted Successfully'
 add = 'Added Successfully'
 error = 'Excel sheet not found'
+
+display_subjects = "SELECT subject FROM teacher_login WHERE id = %s"
+roll_number = "Roll Number"
