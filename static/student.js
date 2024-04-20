@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const distance = calculateDistance(teacherLatitude, teacherLongitude, studentLatitude, studentLongitude);
             console.log(`Calculated distance: ${distance} meters`);
 
-            const allowedRadius = 0.5 * 1000; // Convert to meters
+            const allowedRadius = 0.1 * 1000; // Convert to meters
             if (!isNaN(distance) && distance <= allowedRadius) {
                 stopCamera();
                 alert("You are within the allowed radius. Marking attendance.");

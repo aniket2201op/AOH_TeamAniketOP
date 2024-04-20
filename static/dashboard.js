@@ -4,7 +4,9 @@ document.getElementById('generateQR').addEventListener('click', function (event)
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
         const subject = document.getElementById('subject').value;
-        const currentDate = new Date().toISOString().slice(0, 10);
+        const currentDate = new Date().toLocaleDateString("en-GB", {timeZone: "Asia/Kolkata"});
+        console.log(currentDate);
+
         const duration = document.getElementById('duration').value;
         const user_id = document.getElementById('userid').value;
         // Get current date in YYYY-MM-DD format

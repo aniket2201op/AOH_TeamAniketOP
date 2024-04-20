@@ -6,7 +6,6 @@ import MySQLdb.cursors
 from glob import glob
 from re import match
 from cv2 import imread, cvtColor, COLOR_BGR2GRAY, GaussianBlur, threshold, THRESH_BINARY_INV, dilate, THRESH_OTSU
-# print(cv2.__version__)
 import pytesseract
 from numpy import ones, uint8
 from pandas import read_excel, to_datetime
@@ -124,8 +123,9 @@ def some_function():
 mysql = MySQL(app)
 def accept_attendance(subject):
     flag= True
+    new_subject = subject.strip()
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('UPDATE attendance_validation SET approval=%s WHERE subject=%s', (flag, subject))
+    cursor.execute('UPDATE attendance_validation SET approval=%s WHERE subject=%s', (flag,new_subject))
     mysql.connection.commit()
     cursor.close()
     
@@ -506,7 +506,7 @@ def confirm_numbers(session_id):
     attendance_date = request.form.get('attendance_date')
         # ************
     filename = request.form.get('filename')
-    filename1 = f'{filename}_{session_id}'
+    filename1 = f'{filename}_{session_id}'.strip()
     
     attendance_data = df({cfg.roll_number: [int(num) for num in confirmed_numbers]})
     save_to_excel(attendance_data, attendance_date, filename1) 
@@ -615,7 +615,7 @@ def teacher_dashboard():
         cursor.execute(cfg.display_subjects, (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
-        subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else []
+        subjects = user_data['subject'].split(',') if user_data and 'subject' in user_data else subjects == []
         current_date = datetime.now().strftime('%Y-%m-%d')
         return render_template(cfg.teacher_dashboard, subjects=subjects, date=current_date, user_id=user_id)
 
@@ -642,8 +642,14 @@ def student_dashboard():
 @app.route('/generate_qr_with_location', methods=['POST'])
 def generate_qr_with_location():
     data = request.get_json()
-    subject = data['subject']
-    date = data['date']  # Use the date from the request
+    subject = data['subject'].strip()
+    print(subject)
+    f_date = data['date']  # Use the date from the request
+    date_obj = datetime.strptime(f_date, "%d/%m/%Y")
+
+# Format the datetime object into the desired string format
+    date = date_obj.strftime("%Y-%m-%d")
+    print(date)
     latitude = data['latitude']
     longitude = data['longitude']
     user_id = data['user_id']
@@ -690,7 +696,6 @@ def mark_attendance():
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("SELECT approval FROM attendance_validation WHERE subject = %s", (subject,))
         value = cursor.fetchone()
-        print(subject)
 
         if value['approval'] != '0':
             user_id = session['id']
@@ -704,7 +709,7 @@ def mark_attendance():
                 
                 attendance_data = df({cfg.roll_number: [int(roll_number)]})
                 # print(attendance_data)
-                filename = f"{subject}_{teacher_id}"
+                filename = f"{subject}_{teacher_id}".strip()
                 save_to_excel(attendance_data, date, filename)
                 msg = {"message": "Attendance marked successfully!"}
             else:
@@ -716,7 +721,7 @@ def mark_attendance():
 @app.route('/reject_attendance', methods=['POST'])
 def reject_attendance():
     # Get user_id from the request JSON data
-    subject = request.json.get('subject')
+    subject = request.json.get('subject').strip()
     
     # Update the attendance validation record with the provided user_id
     if subject is not None:
@@ -739,8 +744,8 @@ def get_present_roll_numbers():
     user_id = session.get('id')  # Make sure to use session.get() to handle potential absence of 'id'
 
     if subject and user_id:
-        filename = f"{subject}_{user_id}"
-
+        filename = f"{subject}_{user_id}".strip()
+        print(filename)
         file_path = path.join('static', 'upload_sheet', f'{filename}.xlsx')
         try:
             df1 = read_excel(file_path)
@@ -748,11 +753,12 @@ def get_present_roll_numbers():
             return jsonify({'error': f'Attendance sheet for {subject} not found'})
 
         current_date = datetime.now().strftime('%Y-%m-%d')
-        print(current_date)
+        # print(current_date)
         if current_date in df1.columns:
             present_entries = df1.loc[df1[current_date] == "P", cfg.roll_number]
             present_values = present_entries.tolist()
             return jsonify({'present_values': present_values})
+            print("present here")
         else:
             return jsonify({'error': 'No present entries for today'})
     else:
@@ -800,6 +806,6 @@ def qr_scan():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", ssl_context=("cert.pem", "key.pem"))
 
 
